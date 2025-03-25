@@ -64,6 +64,8 @@ def get_save_folder(args, make_folder=False):
     args        -- argparse Namespace containing the arguments
     make_folder -- whether to create the folder if it doesn't exist
     """
+    # If you're actually using this for SLURM, this folder MUST be an absolute path
+    # that is the same on both compute and login nodes
     folder = f"{osp.dirname(__file__)}/runs/{get_experiment_name(args)}"
     _ = os.makedirs(folder, exist_ok=True) if make_folder else None
     return folder
@@ -96,7 +98,9 @@ class MaskedAutoencoder(nn.Module):
         """Returns [bs] random binary masks for the input images on device [device]
         with optional seed [mask_z].
         """
-        g = None if mask_z is None else torch.Generator("cpu").manual_seed(mask_z)
+        # Otherwise it's the same on each device
+        mask_z = mask_z + Utils.rank_times_many() if isinstance(mask_z, int) else mask_z
+        g = None if mask_z is None else torch.Generator(device).manual_seed(mask_z)
         pps = self.args.img_size // self.args.patch_size
         mask = torch.rand(bs, pps * pps, device=device, generator=g)
         mask = torch.where(mask < self.args.mask_ratio, 0, 1)
@@ -109,7 +113,8 @@ class MaskedAutoencoder(nn.Module):
     @torch.compiler.disable
     def get_codes(self, nz, *, device, z=None):
         """Returns [nz] random codes on device [device] with optional seed [z]."""
-        g = None if z is None else torch.Generator("cpu").manual_seed(z)
+        z = z + Utils.rank_times_many() if isinstance(z, int) else z
+        g = None if z is None else torch.Generator(device).manual_seed(z)
         return torch.randn(nz, self.args.latent_dim, device=device, generator=g)
 
     @torch.no_grad()
@@ -307,12 +312,14 @@ def get_args(args=None, on_compute_node=True):
     # All processes will initially generate different UIDs. We can fix this after
     # initializing DDP.
     args.uid = wandb.util.generate_id() if args.uid is None else args.uid
+    
+    # See, the processes do not agree!
+    print(f"UID: {args.uid}")
 
     # Adaptively set --accum_iter, --bs_per_pass, and --bs_per_gpu based on the
     # current hardware. This means that you can just think in terms of numbers of GPUs
-    # and everything else will work out!
-    if on_compute_node:
-        args = args_with_batch_size_args(args)
+    # and everything else will work out
+    args = args_with_batch_size_args(args) if on_compute_node else args
 
     return args
 
@@ -426,6 +433,8 @@ def get_loader(dataset, *, args, is_ddp=True, seed=None, batch_size=None, shuffl
 # Ideally, whether we evaluate or not on a particular epoch shouldn't change the
 # results of training. This decorator ensures nothing that happens in this function
 # changes the state of randomness outside of it
+#
+# TODO: Determinism is broken for evaluation
 @Utils.stateless
 @torch.no_grad()
 def evaluate(*, results, model, loader, args, num_images_to_visalize=6, num_samples_to_generate=4):
@@ -447,15 +456,17 @@ def evaluate(*, results, model, loader, args, num_images_to_visalize=6, num_samp
     #
     # Note that this operation is SYNCHRONOUS, meaning that each process must have
     # computed a value first. 
-    loss_val, total = 0, 0
-    with torch.autocast("cuda", enabled=args.autocast):
-        with Utils.no_sync_context(model):
-            for x,_ in tqdm_wrap(loader, desc="Validation", leave=False):
 
-                # If we use DataParallel, we should call mean() on the result to get
-                # it to be a scalar
-                loss_val += model(x.to(device, non_blocking=True), reduction="sum").mean()
-                total += len(x)
+    with Utils.SeedContextManager(args.seed):
+        loss_val, total = 0, 0
+        with torch.autocast("cuda", enabled=args.autocast):
+            with Utils.no_sync_context(model):
+                for idx,(x,_) in tqdm_wrap(enumerate(loader), desc="Validation", leave=False, total=len(loader)):
+            
+                    # If we use DataParallel, we should call mean() on the result to get
+                    # it to be a scalar
+                    loss_val += model(x.to(device, non_blocking=True), mask_z=idx, z=idx, reduction="sum").mean()
+                    total += len(x)
 
     loss_val = Utils.all_reduce_sum(loss_val)
     total = Utils.all_reduce_sum(total)
@@ -677,9 +688,9 @@ if __name__ == "__main__":
                 # _ = some function that logs results
                 pass
             Utils.dist_barrier()
-            twrite(f"Epoch {epoch+1:5}/{args.epochs} : lr={results.lr:.2e}, loss_tr={results.loss_tr:.4e} loss_val={results.loss_val:.4e}")
+            twrite(f"Epoch {epoch+1:5}/{args.epochs} : lr={results.lr:.2e}, loss_tr={results.loss_tr:.8e} loss_val={results.loss_val:.8e}")
         else:
-            twrite(f"Epoch {epoch+1:5}/{args.epochs} : lr={results.lr:.2e}, loss_tr={results.loss_tr:.4e}")
+            twrite(f"Epoch {epoch+1:5}/{args.epochs} : lr={results.lr:.2e}, loss_tr={results.loss_tr:.8e}")
 
         ##############################################################################
         # SAVE STATE IF NEEDED. Observe:

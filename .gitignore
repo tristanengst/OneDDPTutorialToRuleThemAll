@@ -4,3 +4,4 @@ MNIST
 __pycache__/
 slurm/
 !slurm/slurm_template.txt
+runs
