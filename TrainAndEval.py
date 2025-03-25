@@ -276,6 +276,12 @@ def get_args(args=None, on_compute_node=True):
     P.add_argument("--h_dim", type=int, default=64,
         help="Dimension of hidden layers")
 
+    # Data hyperparameters. Not needed for DDP, but so SlurmSubmit.py works
+    P.add_argument("--data_tr", default="mnist", choices=["mnist"],
+        help="Training dataset")
+    P.add_argument("--data_val", default="mnist", choices=["mnist"],
+        help="Validation dataset")
+
     # Training hyperparameters for cIMLE
     P.add_argument("--ns", type=int, default=8, 
         help="Number of latent codes to use in sampling")

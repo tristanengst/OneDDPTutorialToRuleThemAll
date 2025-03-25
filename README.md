@@ -10,7 +10,7 @@ While many DDP tutorials exist, the reality is that DDP remains a chaotic mess w
 
 ### Setup
 ```
-git clone .... 
+git clone https://github.com/tristanengst/OneDDPTutorialToRuleThemAll
 cd OneDDPTutorialToRuleThemAll
 conda create -n py311OneDDPTutorial python=3.11
 conda activate py311OneDDPTutorial
@@ -20,7 +20,7 @@ python -c "from torchvision.datasets import MNIST ; m = MNIST(root='.', download
 ```
 
 ### Files
-To get a sense and reasonable understanding of DDP, look here---you can skip to the `get_args()` function (about line 200):
+To get a sense and reasonable understanding of DDP, look here—you can skip to the `get_args()` function (about line 200):
 - `TrainAndEval.py`
 
 And at `init_distributed_mode()` here:

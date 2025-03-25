@@ -61,14 +61,8 @@ def get_node_reqs(*, args, slurm_args, distributed=False):
         enough_cpus = lambda n: node2config[n]["cpus_per_gpu"] * node2config[n]["gpus_per_node"] >= (args.num_workers * gpus_per_node)
         enough_ram = lambda n: slurm_args.mem == "adapt" or node2config[n]["mem_per_gpu"] * gpus_per_node >= int(slurm_args.mem.replace("G", ""))
         
-        if slurm_args.gpu_type == "adapt" and (args.arch.startswith("mlp") or args.arch.startswith("conv")):
+        if slurm_args.gpu_type == "adapt":
             slurm_args.gpu_type = "a100,a40,a5000,l40s,a6000,q6000,2080"
-        elif slurm_args.gpu_type == "adapt" and args.arch.startswith("vit_tiny") and "imle" in args and len(args.gpus) > 2:
-            slurm_args.gpu_type = "a100,a40,a5000,l40s,a6000,q6000,2080"
-        elif slurm_args.gpu_type == "adapt" and args.arch.startswith("vit_tiny") and "imle" in args:
-            slurm_args.gpu_type = "a100,a40,a5000,l40s,a6000,q6000"
-        elif slurm_args.gpu_type == "adapt":
-            slurm_args.gpu_type = "a100,a40,a5000,l40s,q6000"
         else:
             pass
 
@@ -514,9 +508,9 @@ if __name__ == "__main__":
     #                                   is expected to contain important information
     if slurm_args.script in ["TrainAndEval.py",]:
 
-        if slurm_args.script == "TrainSSL2.py":
+        if slurm_args.script == "TrainAndEval.py":
             from TrainAndEval import get_args as get_args
-            from TrainSSL2 import get_save_folder as get_save_folder
+            from TrainAndEval import get_save_folder as get_save_folder
             job_results_str = "pretrain_results"
 
         args = get_args(unparsed_args, on_compute_node=False)
@@ -599,12 +593,12 @@ if __name__ == "__main__":
         # checkpoint, and there's a function that finds the file to resume from.
         ##############################################################################
         # If --resubmit_epi_time is None, it might still be set to a value
-        # if "resume" in args and args.resume == "latest" and slurm_args.resubmit_epi_time is None:
-        #     slurm_args.resubmit_epi_time = 2
-        # elif slurm_args.resubmit_epi_time is None:
-        #     slurm_args.resubmit_epi_time = 0
-        # else:
-        #     pass
+        if "resume" in args and args.resume == "latest" and slurm_args.resubmit_epi_time is None:
+            slurm_args.resubmit_epi_time = 2
+        elif slurm_args.resubmit_epi_time is None:
+            slurm_args.resubmit_epi_time = 0
+        else:
+            pass
 
         # For each argument ending in 'save_iter_t' that is not zero, change it to the
         # maximum of 5 minutes, and the minimum of itself and the time requested for
@@ -697,7 +691,7 @@ if __name__ == "__main__":
     # Set up the node(s) and DDP
     slurm_template = slurm_template.replace("NODE_SETUP_STR", get_setup_node_str(
         slurm_args=slurm_args,
-        get_save_folder=checkpoints_saved_to_folders))
+        get_save_folder=checkpoints_saved_to_folder))
     # slurm_template = slurm_template.replace("COMPUTED_MASTER_PORT", f"{get_random_port()}")
 
     slurm_template = slurm_template.replace("MOVE_CODE_TO_COMPUTE_NODE_STR", get_tar_code_to_compute_node_str(checkpoints_saved_to_folder))
