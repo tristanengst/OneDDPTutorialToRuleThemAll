@@ -582,7 +582,7 @@ if __name__ == "__main__":
         ##############################################################################
 
         gpus_per_node = len(args.gpus)
-        total_gpus = gpus_per_node * args.nodes,
+        total_gpus = gpus_per_node * args.nodes
         checkpoints_saved_to_folder = get_save_folder(args)
         exp_name = get_exp_name(get_save_folder=checkpoints_saved_to_folder,
             total_gpus=total_gpus,

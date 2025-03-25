@@ -451,7 +451,10 @@ def evaluate(*, results, model, loader, args, num_images_to_visalize=6, num_samp
     with torch.autocast("cuda", enabled=args.autocast):
         with Utils.no_sync_context(model):
             for x,_ in tqdm_wrap(loader, desc="Validation", leave=False):
-                loss_val += model(x.to(device, non_blocking=True), reduction="sum")
+
+                # If we use DataParallel, we should call mean() on the result to get
+                # it to be a scalar
+                loss_val += model(x.to(device, non_blocking=True), reduction="sum").mean()
                 total += len(x)
 
     loss_val = Utils.all_reduce_sum(loss_val)
@@ -474,7 +477,7 @@ def evaluate(*, results, model, loader, args, num_images_to_visalize=6, num_samp
         v = einops.rearrange(v, "n s c h w -> (n s) c h w")
         images = torchvision.utils.make_grid(v, nrow=num_images_to_visalize, pad_value=1)
         _ = torchvision.utils.save_image(images, osp.join(get_save_folder(args, make_folder=True), f"epoch_{results.epoch}_samples.png"))
-        _ = torchvision.utils.save_image(images, f"samples_{epoch}_prime.png")
+        _ = torchvision.utils.save_image(images, f"samples_{epoch}.png")
         results.images = images
     else:
         results.images = None
