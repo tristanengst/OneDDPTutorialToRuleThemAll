@@ -1,0 +1,56 @@
+#!/bin/bash
+#SBATCH --requeue
+#SBATCH --time=TIME
+#SBATCH ACCOUNT_OR_PARTITION
+#SBATCH --nodes=NUM_NODES
+#SBATCH --gres=gpu:GPU_STR
+#SBATCH --mem=MEM_PER_NODE
+#SBATCH --tasks-per-node=TASKS_PER_NODE
+#SBATCH --cpus-per-task=CPUS_PER_TASK
+#SBATCH --exclude=EXCLUDED_NODES
+#SBATCH --constraint=CONSTRAINT
+
+# I/O and email notification setup ###################################################
+#SBATCH --job-name=JOB_PREFIXNAME
+#SBATCH --output=JOB_RESULTS_STR/NAME.txt
+#SBATCH --open-mode=append
+
+export OMP_NUM_THREADS=1
+
+########### Contextual info for job ##################################################
+printf "\n\n"
+echo "[`date`] Starting job=$SLURM_JOB_ID"
+srun  -N $SLURM_NNODES -n $SLURM_NNODES bash -c ' echo "[`date`] Working directory=`pwd`    node=$(hostname)" '
+NODE_SETUP_STR
+
+ENV_VARS_STR
+
+echo "r$SLURM_NODEID master: $MASTER_ADDR"
+
+############ Move code to model folder if first task #################################
+need_to_tar_code=$(python UtilsSlurm.py --before_training --function need_to_tar_code --exp MODEL_FOLDER)
+echo "[`date`] need_to_tar_code=$need_to_tar_code"
+if $need_to_tar_code; then
+    TAR_CODE_CMD
+else
+    echo "[`date`] Code already tarred"
+fi
+
+############ Detect whether the current task should run, set persisted date ##########
+python UtilsSlurm.py --before_training --function startup_check --exp MODEL_FOLDER --submit_dir SUBMITED_FROM_DIR --slurm_script SBATCHSH
+
+############ Move code to the compute node ###########################################
+MOVE_CODE_TO_COMPUTE_NODE_STR
+
+srun -N $SLURM_NNODES -n $SLURM_NNODES nvidia-smi
+
+############ Training. Use srun --time to ensure time limit is enforced ##############
+SCRIPT
+
+############ Detect and implement finishing conditions if time permits ###############
+python UtilsSlurm.py --function shutdown_check --exp MODEL_FOLDER --slurm_script SBATCHSH --epi_time EPI  --submit_dir SUBMITED_FROM_DIR
+
+########### Contextual info for job ##################################################
+echo "[`date`] Ending job=$SLURM_JOB_ID"
+echo "[`date`] Working directory=`pwd`    node=`hostname`"
+
