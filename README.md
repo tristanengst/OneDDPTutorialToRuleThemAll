@@ -1,13 +1,12 @@
 # One DDP Tutorial to Rule Them All
-While many DDP tutorials exist, most are missing important information and utilities that provide crucial quality-of-life improvements. 
+While many DDP tutorials exist, the reality is that DDP remains a chaotic mess where things that should work don't. Most tutorials lack the important information and utilities that bring order to this chaos and provide crucial quality-of-life improvements. This one rectifies these issues with an explicit focus on APEX lab compute resources. *Key features*:
 
+1. Automatic batch size scaling
+2. Automatically sets good defaults you didn't know needed to be set
+3. Handles randomness as well as possible
+4. Works on Solar and ComputeCanada SLURM environments without changing anything. On ComputeCanada, multi-node training happens by specifing `--nodes X` with `X` more than one
+5. TBD: SafeTensors data—handles arbitrary image datasets _without_ changing the data distribution. Not only 20% faster, but also fixes a yet-unidentified issue with JPEG data 
 
-
-
-
-
-
-The code here trains a tiny denoising autoencoder with cIMLE, while serving as medium to communicate these utilities and a great deal of painstakingly-learned errata.
 
 ### Setup
 ```
@@ -16,7 +15,7 @@ cd OneDDPTutorialToRuleThemAll
 conda create -n py311OneDDPTutorial python=3.11
 conda activate py311OneDDPTutorial
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-pip install einops wandb # WandB account not needed
+pip install einops wandb # WandB account not needed, just the package
 python -c "from torchvision.datasets import MNIST ; m = MNIST(root='.', download=True)"
 ```
 
@@ -29,7 +28,7 @@ And at `init_distributed_mode()` here:
 
 I've included other files as a minimal working example of how to make managing many jobs that use lots of GPUs tractable, especially on SLURM:
 - `pip_reqs_cc.txt` would be useful if we were running on ComputeCanada
-- `SlurmSubmit.py` is a large, complicated script that makes submitting jobs super easy
+- `SlurmSubmit.py` is a large, complicated script that makes submitting jobs non-annoying
 - `UtilsSlurm.py` is used by `SlurmSubmit.py`
 - `UtilsPersistedState.py` is used by `UtilsSlurm.py`
 Also see [ScriptsAndAliases](https://github.com/tristanengst/ScriptsAndAliases) for this.
@@ -65,4 +64,4 @@ python SlurmSubmit.py TrainAndEval.py --speedup compile_ddp --gpus 0 1 2 3 ... -
 Multi-node:
 ```
 python SlurmSubmit.py TrainAndEval.py --speedup compile_ddp --gpus 0 1 2 3 --nodes 2 ... --time 6:00:00 --account def-keli
-```# OneDDPTutorialToRuleThemAll
+```
