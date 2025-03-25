@@ -2,3 +2,5 @@ MNIST
 *.png
 *.pt
 __pycache__/
+slurm/
+!slurm/slurm_template.txt
